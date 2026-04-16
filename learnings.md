@@ -26,8 +26,9 @@ Insights and patterns discovered while building with Claude Code, AWS, and FastA
 - **t4g.micro is the sweet spot for learning** — ARM/Graviton, free tier eligible (750 hrs/month for 12 months). Cheaper than t2.micro and better performance. (2026-04-15)
 - **Always bump EBS to 20 GB** — default 8 GB fills up fast with Python venvs and dependencies. 20 GB gp3 is still free tier. (2026-04-15)
 - **AMI selection via CLI** — `aws ec2 describe-images --owners 099720109477 --filters "Name=name,Values=ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-arm64-server-*"` then sort by `CreationDate` and grab the latest. Owner `099720109477` is Canonical (Ubuntu). (2026-04-15)
-- **No Elastic IP yet** — the public IP changes on stop/start. Fine for learning; attach one when it becomes annoying. (2026-04-15)
+- **Elastic IP is free while attached to a running instance** — but costs ~$3.65/month when the instance is stopped. If you stop EC2 for a while, consider releasing the EIP and re-allocating later. (2026-04-16)
 - **Set up billing alerts immediately on a new account** — Budgets → Create a $10/month budget with email alerts. Haven't done this yet — should be next. (2026-04-15)
+- **AWS CLI can do everything the console can** — `aws ec2`, `aws rds`, `aws dynamodb`, `aws lambda` — full control over every service. With Claude Code running CLI commands, you can manage all of AWS without opening a browser. IAM user `kev` has `AdministratorAccess`. (2026-04-16)
 
 ## EC2 Deployment
 
@@ -44,6 +45,18 @@ Insights and patterns discovered while building with Claude Code, AWS, and FastA
 - **Attach Elastic IP before setting up DNS** — otherwise DNS points at an ephemeral IP that changes on stop/start. Elastic IP is free while associated with a running instance. Allocated `eipalloc-0132e4fd0a6c21d41` → `32.194.2.97`. (2026-04-15)
 - **Namecheap DNS propagates fast** — root domain A record resolved within a minute. `www` CNAME took slightly longer. Use `dig +short physicskev.com` to check. (2026-04-15)
 - **Update Nginx `server_name` before running Certbot** — Certbot uses the server_name directive to know which server block to modify. Change `server_name _;` to `server_name physicskev.com www.physicskev.com;` first. (2026-04-15)
+
+## Cloud Databases
+
+- **RDS Postgres free tier: `db.t4g.micro`, 750 hrs/month, 20 GB** — same managed Postgres as production workloads. Creates in ~5 minutes via CLI. Must create a security group that allows port 5432 from your IP. Key gotcha: the instance runs 24/7 and eats free tier hours even when idle. You can stop it, but it auto-restarts after 7 days. (2026-04-16)
+- **DynamoDB is always free at low usage** — 25 GB storage + 25 read/write capacity units, permanently free (not just 12 months). Use `PAY_PER_REQUEST` billing mode so you never worry about provisioned capacity. (2026-04-16)
+- **DynamoDB partition key design matters** — use `pk` (partition key) + `sk` (sort key) pattern. Group related items under the same partition: `BOOKMARK#aws`, `BOOKMARK#python`. Query by partition is fast; scan across all partitions is slow and expensive. This is the biggest mental shift from SQL. (2026-04-16)
+- **Postgres vs DynamoDB in practice** — Postgres: SQL, schemas, JOINs, ILIKE search, familiar. DynamoDB: NoSQL, key-value, no JOINs, design your keys around your access patterns. Use Postgres when you need relational queries; use DynamoDB when you need cheap, always-on, simple lookups. (2026-04-16)
+- **RDS security group for local dev** — create a separate security group (`rds-learning-sg`) that allows port 5432 from your current IP (`curl -s https://api.ipify.org`). Also allow from the EC2 security group so the instance can connect later. Your IP may change — update the rule if you can't connect. (2026-04-16)
+- **Environment variables for database credentials** — use a `.env` file (gitignored) with `PG_HOST`, `PG_PASSWORD`, etc. Load with `set -a && source .env && set +a` before running uvicorn. Cleaner than work's `secret.py` pattern and more standard. (2026-04-16)
+- **`psycopg2.extras.RealDictCursor` returns real dicts** — without it, `psycopg2` returns tuples. Use `cursor_factory=psycopg2.extras.RealDictCursor` to get dict rows that serialize directly to JSON. (2026-04-16)
+- **boto3 uses your `~/.aws/credentials` automatically** — no need to pass access keys in code. The `aws configure` setup from earlier works for both CLI and boto3. Just set the region via env var or boto3 resource constructor. (2026-04-16)
+- **Develop locally, deploy selectively** — build and test on your Mac (fast iteration), use cloud databases for persistence (data survives restarts), deploy individual features as Lambda functions when you want to share them. EC2 stays stopped most of the time. (2026-04-16)
 
 ## Gotchas & Pitfalls
 
