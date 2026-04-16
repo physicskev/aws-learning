@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test 4 — Board</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f5f5f5; color: #333; padding: 20px; }
+        h1 { margin-bottom: 16px; font-size: 1.5rem; }
+
+        .toolbar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+        .toolbar select, .toolbar input { padding: 8px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; background: white; }
+        .toolbar input { min-width: 180px; }
+        .btn { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; }
+        .btn-primary { background: #2563eb; color: white; }
+        .btn-primary:hover { background: #1d4ed8; }
+
+        .view-tabs { display: flex; gap: 4px; margin-bottom: 16px; }
+        .view-tab { padding: 8px 18px; border: 1px solid #ddd; border-radius: 6px; background: white; cursor: pointer; font-size: 14px; }
+        .view-tab.active { background: #f59e0b; color: white; border-color: #f59e0b; }
+
+        /* List view */
+        .ticket-list { display: flex; flex-direction: column; gap: 6px; }
+        .ticket-row { background: white; border-radius: 6px; padding: 12px 16px; border: 1px solid #e5e5e5; display: flex; align-items: center; gap: 12px; cursor: pointer; }
+        .ticket-row:hover { border-color: #f59e0b; }
+        .ticket-key { font-family: "SF Mono", Monaco, monospace; font-size: 12px; color: #2563eb; font-weight: 600; min-width: 70px; }
+        .ticket-type-icon { font-size: 14px; min-width: 20px; }
+        .ticket-summary { flex: 1; font-size: 14px; }
+        .badge { padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+        .badge-Backlog { background: #f1f5f9; color: #64748b; }
+        .badge-ToDo, .badge-To\ Do { background: #dbeafe; color: #1e40af; }
+        .badge-InProgress, .badge-In\ Progress { background: #fef3c7; color: #92400e; }
+        .badge-InReview, .badge-In\ Review { background: #ede9fe; color: #6d28d9; }
+        .badge-Done { background: #d1fae5; color: #065f46; }
+        .badge-Cancelled { background: #fee2e2; color: #991b1b; }
+        .badge-Critical { background: #fee2e2; color: #991b1b; }
+        .badge-High { background: #fff7ed; color: #c2410c; }
+        .badge-Medium { background: #fef3c7; color: #92400e; }
+        .badge-Low { background: #f1f5f9; color: #64748b; }
+        .ticket-assignee { font-size: 12px; color: #888; min-width: 100px; text-align: right; }
+
+        /* Board view */
+        .board { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 16px; }
+        .board-column { min-width: 260px; max-width: 300px; flex-shrink: 0; }
+        .column-header { font-weight: 700; font-size: 13px; text-transform: uppercase; color: #666; padding: 8px 12px; margin-bottom: 8px; display: flex; justify-content: space-between; }
+        .column-header .count { background: #e5e5e5; padding: 1px 8px; border-radius: 8px; font-size: 11px; }
+        .board-card { background: white; border-radius: 6px; padding: 10px 12px; border: 1px solid #e5e5e5; margin-bottom: 6px; cursor: pointer; font-size: 13px; }
+        .board-card:hover { border-color: #f59e0b; }
+        .board-card .ticket-key { font-size: 11px; }
+        .board-card-meta { display: flex; gap: 6px; margin-top: 6px; }
+
+        /* Modal */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 100; }
+        .modal-overlay.open { display: flex; justify-content: center; align-items: flex-start; padding-top: 60px; }
+        .modal { background: white; border-radius: 10px; padding: 24px; width: 90%; max-width: 700px; max-height: 80vh; overflow-y: auto; }
+        .modal h2 { font-size: 1.1rem; margin-bottom: 16px; }
+        .modal-row { display: flex; gap: 8px; margin-bottom: 10px; align-items: center; }
+        .modal-row label { font-size: 13px; color: #666; width: 90px; flex-shrink: 0; }
+        .modal-row input, .modal-row select, .modal-row textarea { flex: 1; padding: 8px 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; font-family: inherit; }
+        .modal-row textarea { min-height: 80px; resize: vertical; }
+        .modal-actions { display: flex; gap: 8px; margin-top: 16px; justify-content: flex-end; }
+        .btn-danger { background: #ef4444; color: white; }
+        .btn-danger:hover { background: #dc2626; }
+        .btn-secondary { background: #e5e5e5; color: #333; }
+
+        .comments-section { margin-top: 16px; border-top: 1px solid #eee; padding-top: 12px; }
+        .comments-section h3 { font-size: 14px; margin-bottom: 8px; }
+        .comment { background: #f8fafc; padding: 8px 12px; border-radius: 6px; margin-bottom: 6px; font-size: 13px; }
+        .comment-meta { font-size: 11px; color: #888; margin-bottom: 4px; }
+        .comment-add { display: flex; gap: 8px; margin-top: 8px; }
+        .comment-add input { flex: 1; }
+
+        .type-icon { font-size: 14px; }
+        .stats { text-align: center; color: #999; font-size: 13px; margin-bottom: 12px; }
+        .toggle-done { font-size: 12px; color: #2563eb; cursor: pointer; margin-left: auto; }
+    </style>
+</head>
+<body>
+    <h1>Board</h1>
+
+    <div class="view-tabs">
+        <div class="view-tab active" onclick="switchView('list')">List</div>
+        <div class="view-tab" onclick="switchView('board')">Board</div>
+    </div>
+
+    <div class="toolbar">
+        <select id="f-status" onchange="loadTickets()"><option value="">All Statuses</option></select>
+        <select id="f-type" onchange="loadTickets()"><option value="">All Types</option></select>
+        <select id="f-priority" onchange="loadTickets()"><option value="">All Priorities</option></select>
+        <select id="f-assignee" onchange="loadTickets()"><option value="">All Assignees</option></select>
+        <select id="f-label" onchange="loadTickets()"><option value="">All Labels</option></select>
+        <input type="text" id="f-search" placeholder="Search..." oninput="loadTickets()">
+        <button class="btn btn-primary" onclick="showCreateModal()">+ New Ticket</button>
+    </div>
+
+    <div class="stats" id="stats"></div>
+
+    <div id="list-view">
+        <div class="ticket-list" id="ticket-list"></div>
+    </div>
+
+    <div id="board-view" style="display:none">
+        <div style="margin-bottom:8px"><span class="toggle-done" id="toggle-done" onclick="toggleDone()">Show Done/Cancelled</span></div>
+        <div class="board" id="board"></div>
+    </div>
+
+    <!-- Ticket detail modal -->
+    <div class="modal-overlay" id="modal" onclick="if(event.target===this)closeModal()">
+        <div class="modal" id="modal-content"></div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test 2 — Research Viewer</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f5f5f5; color: #333; padding: 20px; max-width: 960px; margin: 0 auto; }
+        h1 { margin-bottom: 20px; font-size: 1.5rem; }
+
+        .input-section { background: white; border-radius: 8px; padding: 20px; border: 1px solid #e5e5e5; margin-bottom: 20px; }
+        .input-section label { font-weight: 600; font-size: 14px; display: block; margin-bottom: 6px; }
+        .input-section textarea { width: 100%; min-height: 120px; padding: 10px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; font-family: inherit; resize: vertical; margin-bottom: 12px; }
+        .input-section input[type="text"] { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; margin-bottom: 12px; }
+
+        .btn-row { display: flex; gap: 10px; align-items: center; }
+        .btn-research { padding: 10px 24px; background: #7c3aed; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600; }
+        .btn-research:hover { background: #6d28d9; }
+        .btn-research:disabled { background: #c4b5fd; cursor: not-allowed; }
+        .status { font-size: 13px; color: #666; }
+
+        .results { background: white; border-radius: 8px; padding: 24px; border: 1px solid #e5e5e5; display: none; }
+        .results.visible { display: block; }
+        .results-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid #eee; padding-bottom: 12px; }
+        .results-header h2 { font-size: 1.1rem; }
+        .results-meta { font-size: 12px; color: #888; }
+
+        .tab-bar { display: flex; gap: 4px; margin-bottom: 16px; }
+        .tab { padding: 6px 14px; border: 1px solid #ddd; border-radius: 4px; background: white; cursor: pointer; font-size: 13px; }
+        .tab.active { background: #7c3aed; color: white; border-color: #7c3aed; }
+
+        .markdown-body { line-height: 1.7; font-size: 15px; }
+        .markdown-body h2 { margin-top: 24px; margin-bottom: 8px; font-size: 1.2rem; color: #1e293b; }
+        .markdown-body h3 { margin-top: 16px; margin-bottom: 6px; font-size: 1rem; }
+        .markdown-body p { margin-bottom: 10px; }
+        .markdown-body ul, .markdown-body ol { margin-bottom: 10px; padding-left: 24px; }
+        .markdown-body li { margin-bottom: 4px; }
+        .markdown-body a { color: #2563eb; }
+        .markdown-body code { background: #f1f5f9; padding: 2px 6px; border-radius: 3px; font-size: 13px; }
+        .markdown-body pre { background: #1e293b; color: #e2e8f0; padding: 16px; border-radius: 6px; overflow-x: auto; margin-bottom: 12px; }
+        .markdown-body pre code { background: none; padding: 0; color: inherit; }
+        .markdown-body strong { font-weight: 600; }
+        .markdown-body blockquote { border-left: 3px solid #7c3aed; padding-left: 12px; color: #666; margin-bottom: 10px; }
+
+        .raw-body { white-space: pre-wrap; font-family: "SF Mono", Monaco, monospace; font-size: 13px; background: #f8fafc; padding: 16px; border-radius: 6px; display: none; }
+    </style>
+</head>
+<body>
+    <h1>Research Viewer</h1>
+
+    <div class="input-section">
+        <label>Topics (one per line)</label>
+        <textarea id="topics" placeholder="Rust programming language
+WebAssembly in 2026
+SQLite vs Postgres for small projects"></textarea>
+        <label>Extra instructions (optional)</label>
+        <input type="text" id="extra" placeholder="e.g. Focus on practical use cases, keep it concise">
+        <div class="btn-row">
+            <button class="btn-research" id="btn-run" onclick="runResearch()">Run Research</button>
+            <span class="status" id="status"></span>
+        </div>
+    </div>
+
+    <div class="results" id="results">
+        <div class="results-header">
+            <h2>Results</h2>
+            <span class="results-meta" id="results-meta"></span>
+        </div>
+        <div class="tab-bar">
+            <div class="tab active" onclick="showTab('rendered')">Rendered</div>
+            <div class="tab" onclick="showTab('raw')">Raw Markdown</div>
+        </div>
+        <div class="markdown-body" id="rendered"></div>
+        <div class="raw-body" id="raw"></div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
