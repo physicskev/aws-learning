@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Environment / secrets
+.env
+secret.py
+
+# SQLite (large DBs — small ones are fine to commit)
+# *.db
+
+# OS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Claude Code
+.claude/
