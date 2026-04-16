@@ -4,12 +4,14 @@ Personal AWS experimentation workspace. Same architecture pattern as the work ex
 
 ## Server
 
+- **Domain**: `physicskev.com` (registered on Namecheap)
 - **EC2 instance**: `i-09b4f3e3492583c2c` (aws-learning)
 - **Type**: t4g.micro (ARM/Graviton), Ubuntu 24.04
-- **Public IP**: `3.95.0.131` (will change on stop/start — no Elastic IP yet)
-- **SSH**: `ssh -i ~/.ssh/kev-aws-learning.pem ubuntu@3.95.0.131`
+- **Elastic IP**: `32.194.2.97` (permanent, won't change on stop/start)
+- **SSH**: `ssh -i ~/.ssh/kev-aws-learning.pem ubuntu@32.194.2.97`
 - **AWS region**: us-east-1
 - **Security group**: `sg-094fb41fbad9b266a` (ports 22, 80, 443)
+- **SSL**: Let's Encrypt via Certbot, auto-renews. Cert at `/etc/letsencrypt/live/physicskev.com/`
 
 ## Experiment pattern
 
@@ -50,12 +52,13 @@ nohup uv run uvicorn main:app --host 127.0.0.1 --port 800<n> > /tmp/test<n>.log 
 ```
 
 Nginx reverse proxies each experiment. Config at `/etc/nginx/sites-available/experiments`.
-- `http://3.95.0.131/` → Landing page with links to all experiments
-- `http://3.95.0.131/test1/` → `localhost:8001`
-- `http://3.95.0.131/test2/` → `localhost:8002`
-- `http://3.95.0.131/test3/` → `localhost:8003`
-- `http://3.95.0.131/test4/` → `localhost:8004`
-- `http://3.95.0.131/test5/` → `localhost:8005`
+HTTP auto-redirects to HTTPS.
+- `https://physicskev.com/` → Landing page with links to all experiments
+- `https://physicskev.com/test1/` → `localhost:8001`
+- `https://physicskev.com/test2/` → `localhost:8002`
+- `https://physicskev.com/test3/` → `localhost:8003`
+- `https://physicskev.com/test4/` → `localhost:8004`
+- `https://physicskev.com/test5/` → `localhost:8005`
 
 To stop all experiments: `pkill -f uvicorn` (or `killall uvicorn`)
 Processes use `nohup` so they survive SSH disconnect, but NOT instance reboot.

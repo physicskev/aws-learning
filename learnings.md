@@ -37,6 +37,14 @@ Insights and patterns discovered while building with Claude Code, AWS, and FastA
 - **`pkill -f uvicorn` over SSH can kill the SSH session itself** — if the signal propagates weirdly. Use `killall uvicorn` or `bash -s` heredoc with `killall -q` instead. The `-q` suppresses "no process found" errors. (2026-04-15)
 - **Bind to 127.0.0.1 on EC2, not 0.0.0.0** — Nginx handles external traffic. Uvicorn only needs to listen on localhost since Nginx proxies to it. This prevents direct access to ports 8001-8005 bypassing Nginx. (2026-04-15)
 
+## Domain & SSL
+
+- **Let's Encrypt + Certbot = free SSL in one command** — `sudo certbot --nginx -d physicskev.com -d www.physicskev.com --non-interactive --agree-tos -m email --redirect` does everything: gets the cert, edits Nginx config for SSL, sets up HTTP→HTTPS redirect, and schedules auto-renewal. (2026-04-15)
+- **Need a domain for SSL — can't cert a bare IP** — Let's Encrypt won't issue certs for IP addresses. Cheapest path: buy a domain (~$10/year on Namecheap), point A records at the Elastic IP. (2026-04-15)
+- **Attach Elastic IP before setting up DNS** — otherwise DNS points at an ephemeral IP that changes on stop/start. Elastic IP is free while associated with a running instance. Allocated `eipalloc-0132e4fd0a6c21d41` → `32.194.2.97`. (2026-04-15)
+- **Namecheap DNS propagates fast** — root domain A record resolved within a minute. `www` CNAME took slightly longer. Use `dig +short physicskev.com` to check. (2026-04-15)
+- **Update Nginx `server_name` before running Certbot** — Certbot uses the server_name directive to know which server block to modify. Change `server_name _;` to `server_name physicskev.com www.physicskev.com;` first. (2026-04-15)
+
 ## Gotchas & Pitfalls
 
 - **uv + hatchling "Unable to determine which files to ship"** — `uv init` creates a pyproject.toml with hatchling as the build backend, which expects a Python package directory matching the project name. For FastAPI apps that aren't installable packages, add `[tool.hatch.build.targets.wheel] packages = ["."]` to fix it. (2026-04-15)
