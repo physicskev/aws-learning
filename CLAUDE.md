@@ -30,25 +30,53 @@ test<n>-name/
 └── prd-test<n>-*.md      # requirements doc
 ```
 
+## Running experiments locally
+
+```bash
+cd test<n>-name/api
+uv sync
+uv run uvicorn main:app --port 800<n> --reload
+# Open http://localhost:800<n>
+```
+
 ## Running experiments on EC2
 
 ```bash
+ssh -i ~/.ssh/kev-aws-learning.pem ubuntu@3.95.0.131
+export PATH="$HOME/.local/bin:$PATH"
 cd /home/ubuntu/aws-learning/test<n>-name/api
 uv sync
-uv run uvicorn main:app --host 0.0.0.0 --port 800<n> --reload
+nohup uv run uvicorn main:app --host 127.0.0.1 --port 800<n> > /tmp/test<n>.log 2>&1 &
 ```
 
-Nginx reverse proxies each experiment:
-- `http://<ip>/test1/` → `localhost:8001`
-- `http://<ip>/test2/` → `localhost:8002`
-- etc.
+Nginx reverse proxies each experiment. Config at `/etc/nginx/sites-available/experiments`.
+- `http://3.95.0.131/` → Landing page with links to all experiments
+- `http://3.95.0.131/test1/` → `localhost:8001`
+- `http://3.95.0.131/test2/` → `localhost:8002`
+- `http://3.95.0.131/test3/` → `localhost:8003`
+- `http://3.95.0.131/test4/` → `localhost:8004`
+- `http://3.95.0.131/test5/` → `localhost:8005`
+
+To stop all experiments: `pkill -f uvicorn` (or `killall uvicorn`)
+Processes use `nohup` so they survive SSH disconnect, but NOT instance reboot.
 
 ## Port convention
 
-| Experiment | Port |
-|-----------|------|
-| test1-tasks | 8001 |
-| (future) | 8002+ |
+| Experiment | Port | Description |
+|-----------|------|-------------|
+| test1-tasks | 8001 | Task manager CRUD |
+| test2-research | 8002 | Claude-powered research viewer |
+| test3-search | 8003 | FTS5 movie search |
+| test4-board | 8004 | Kanban board / ticket tracker |
+| test5-lambda | 8005 | Lambda handler (local wrapper) |
+
+## Seed data
+
+test3 and test4 need generated data before first run:
+```bash
+cd test3-search/db && python3 seed_data.py   # generates movies.db (200 movies)
+cd test4-board/db && python3 seed_data.py     # generates board.db (150 tickets)
+```
 
 ## Key differences from work setup
 

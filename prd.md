@@ -110,34 +110,78 @@ Single page with:
 
 ---
 
-## Future Experiments (not yet started)
+## Experiment 2: Research Viewer (test2-research) — DONE
 
-These mirror the work experiments but with personal/fake data:
+**Purpose:** Call Claude CLI from a web UI, display markdown results. Based on work's test2-fda but without SendGrid.
 
-### Experiment 2: Data Explorer (test2-explorer)
-Browse and search a dataset. Equivalent to test1-status + test3-activities from work. Use a public dataset (e.g., movies, books, recipes) instead of medical data. Practice SQLite FTS5 full-text search.
+**How it works:**
+- User enters topics (one per line) and optional extra instructions
+- "Run Research" calls `claude -p "prompt" --allowedTools "WebSearch,WebFetch"` via `asyncio.create_subprocess_exec`
+- Results rendered as markdown with a raw/rendered toggle
+- No email sending — just research + preview
 
-### Experiment 3: Board/Tracker (test3-board)
-Kanban board with CRUD. Equivalent to test4-jira from work. Fake project tickets. Practice inline editing, swimlane views, Excel/CSV import.
+**Note:** Claude CLI not installed on EC2 yet. Works locally on Mac where Claude Code is installed.
 
-### Experiment 4: Lambda Function (test4-lambda)
-Serverless endpoint. Equivalent to test5-lambda from work. Practice Lambda, API Gateway, IAM roles, VPC if connecting to RDS.
+---
 
-### Experiment 5: Full AWS Stack (test5-full)
-Combine everything: RDS Postgres, S3 for file storage, SES for email, CloudFront for CDN. The "graduation" experiment.
+## Experiment 3: Movie Search (test3-search) — DONE
+
+**Purpose:** FTS5 full-text search over a fake dataset. Based on work's test3-activities but with 200 generated movies instead of medical activities.
+
+**Data:** `db/seed_data.py` generates 200 movies with titles, genres, directors, cast, synopses, ratings, and reviews. Stored in SQLite with FTS5 indexes on both movies and reviews.
+
+**Features:**
+- Browse tab: filter by genre, director, sort by rating/year/title
+- Search tab: FTS5 search with title/cast/synopsis mode and review mode
+- Highlighted snippets via FTS5 `snippet()`, LIKE fallback for special chars
+- Expandable movie cards with full details
+
+---
+
+## Experiment 4: Board (test4-board) — DONE
+
+**Purpose:** Kanban board with fake project tickets. Based on work's test4-jira.
+
+**Data:** `db/seed_data.py` generates 150 tickets (AWS-1 through AWS-150) with types, statuses, priorities, assignees, labels, and comments.
+
+**Features:**
+- List view: filterable by status, type, priority, assignee, label, search text
+- Board view: columns by status (Backlog → Done), toggle Done/Cancelled visibility
+- Ticket detail modal: inline editing of all fields, comments
+- Create new tickets with auto-incrementing AWS-N keys
+- Full CRUD on tickets and comments
+
+---
+
+## Experiment 5: Lambda (test5-lambda) — DONE
+
+**Purpose:** AWS Lambda handler with local testing. Based on work's test5-lambda.
+
+**Architecture:**
+- `function/lambda_handler.py` — pure Python handler, no AWS SDK dependencies
+- `test/local_server.py` — FastAPI wrapper that converts HTTP → API Gateway v2 event format
+- `deploy.sh` — builds zip and uploads to AWS Lambda (not yet deployed)
+
+**Endpoints:** GET/POST/DELETE on `/api/items` plus `/api/health`. In-memory store for local testing.
+
+**Next step:** Actually deploy to AWS Lambda + API Gateway.
+
+---
+
+## Future Work
+
+- **Systemd services** — so experiments survive EC2 reboot
+- **RDS Postgres** — replace SQLite with managed Postgres for test1 or test3
+- **Deploy test5 to real Lambda** — create the function, API Gateway, IAM role
+- **S3 + CloudFront** — serve static files from CDN
+- **SES** — add email sending to test2 (replace work's SendGrid)
+- **Domain + HTTPS** — Route53 + ACM certificate
+- **CI/CD** — GitHub Actions to auto-deploy on push
 
 ---
 
 ## Out of scope (for now)
 
-- Domain name / HTTPS (use raw IP + HTTP for learning)
 - Docker / containers
-- CI/CD pipelines
 - Production concerns (logging, monitoring, error tracking)
 - CSS frameworks (keep it ugly and functional)
-
----
-
-## How to start
-
-Give this PRD to Claude Code and say: "Set up the EC2 server (install uv, nginx, git) and build experiment 1."
