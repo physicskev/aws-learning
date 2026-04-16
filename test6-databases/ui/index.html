@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test 6 — Cloud Databases</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f5f5f5; color: #333; padding: 20px; max-width: 960px; margin: 0 auto; }
+        h1 { margin-bottom: 8px; font-size: 1.5rem; }
+        .subtitle { color: #888; font-size: 13px; margin-bottom: 20px; }
+
+        .status-bar { display: flex; gap: 12px; margin-bottom: 20px; padding: 12px 16px; background: white; border-radius: 8px; border: 1px solid #e5e5e5; font-size: 13px; }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 4px; }
+        .status-dot.ok { background: #22c55e; }
+        .status-dot.err { background: #ef4444; }
+        .status-dot.unknown { background: #fbbf24; }
+
+        .tabs { display: flex; gap: 4px; margin-bottom: 20px; }
+        .tab { padding: 10px 20px; border: 1px solid #ddd; border-radius: 6px; background: white; cursor: pointer; font-size: 14px; font-weight: 600; }
+        .tab.pg.active { background: #3b82f6; color: white; border-color: #3b82f6; }
+        .tab.dynamo.active { background: #f59e0b; color: white; border-color: #f59e0b; }
+
+        .section { display: none; }
+        .section.active { display: block; }
+
+        .add-form { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+        .add-form input, .add-form select { padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; }
+        .add-form input { flex: 1; min-width: 120px; }
+        .btn { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; }
+        .btn-pg { background: #3b82f6; color: white; }
+        .btn-pg:hover { background: #2563eb; }
+        .btn-dynamo { background: #f59e0b; color: white; }
+        .btn-dynamo:hover { background: #d97706; }
+        .btn-danger { background: #ef4444; color: white; }
+        .btn-danger:hover { background: #dc2626; }
+        .btn-sm { padding: 4px 10px; font-size: 11px; }
+
+        .card-list { display: flex; flex-direction: column; gap: 8px; }
+        .card { background: white; border-radius: 8px; padding: 14px 16px; border: 1px solid #e5e5e5; }
+        .card:hover { border-color: #cbd5e1; }
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+        .card-title { font-weight: 600; font-size: 15px; }
+        .card-meta { font-size: 12px; color: #888; }
+        .card-detail { font-size: 13px; color: #555; margin-top: 4px; }
+        .card-actions { display: flex; gap: 6px; margin-top: 8px; }
+
+        .badge { padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+        .badge-pg { background: #dbeafe; color: #1e40af; }
+        .badge-dynamo { background: #fef3c7; color: #92400e; }
+
+        .empty { text-align: center; color: #999; padding: 40px; }
+        a { color: #2563eb; }
+    </style>
+</head>
+<body>
+    <h1>Cloud Databases</h1>
+    <p class="subtitle">Postgres (RDS) for contacts, DynamoDB for bookmarks</p>
+
+    <div class="status-bar" id="status-bar">Checking connections...</div>
+
+    <div class="tabs">
+        <div class="tab pg active" onclick="switchTab('pg')">Postgres — Contacts</div>
+        <div class="tab dynamo" onclick="switchTab('dynamo')">DynamoDB — Bookmarks</div>
+    </div>
+
+    <!-- Postgres section -->
+    <div class="section active" id="pg-section">
+        <div class="add-form">
+            <input id="pg-name" placeholder="Name *">
+            <input id="pg-email" placeholder="Email">
+            <input id="pg-company" placeholder="Company">
+            <button class="btn btn-pg" onclick="pgCreate()">Add Contact</button>
+        </div>
+        <div class="add-form">
+            <input id="pg-search" placeholder="Search contacts..." oninput="pgLoad()">
+        </div>
+        <div class="card-list" id="pg-list"></div>
+    </div>
+
+    <!-- DynamoDB section -->
+    <div class="section" id="dynamo-section">
+        <div class="add-form">
+            <select id="dynamo-cat-input">
+                <option value="aws">aws</option>
+                <option value="python">python</option>
+                <option value="tools">tools</option>
+                <option value="learning">learning</option>
+            </select>
+            <input id="dynamo-title" placeholder="Title *">
+            <input id="dynamo-url" placeholder="URL *">
+            <input id="dynamo-notes" placeholder="Notes">
+            <button class="btn btn-dynamo" onclick="dynamoCreate()">Add Bookmark</button>
+        </div>
+        <div class="add-form">
+            <select id="dynamo-filter" onchange="dynamoLoad()">
+                <option value="">All Categories</option>
+            </select>
+        </div>
+        <div class="card-list" id="dynamo-list"></div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
