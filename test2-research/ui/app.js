@@ -1,4 +1,5 @@
-const API = "/api";
+const basePath = window.location.pathname.replace(/\/$/, '');
+const API = basePath + "/api";
 
 async function runResearch() {
     const topics = document.getElementById("topics").value.trim();

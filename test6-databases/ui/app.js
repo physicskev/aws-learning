@@ -1,4 +1,6 @@
-const API = "/api";
+// Detect base path: works both locally (/) and behind Nginx (/test6/)
+const basePath = window.location.pathname.replace(/\/$/, '');
+const API = basePath + "/api";
 
 // --- Status ---
 async function checkHealth() {

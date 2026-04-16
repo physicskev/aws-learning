@@ -1,4 +1,5 @@
-const API = "/api";
+const basePath = window.location.pathname.replace(/\/$/, '');
+const API = basePath + "/api";
 let currentView = "list";
 let showDone = false;
 let filterData = {};
