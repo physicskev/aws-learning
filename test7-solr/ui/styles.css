@@ -104,14 +104,92 @@ main {
 
 .stats-card {
   background: white; border: 1px solid #e2e8f0; border-radius: 8px;
-  padding: 14px 18px; margin-bottom: 12px;
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 14px;
+  padding: 16px 20px; margin-bottom: 12px;
+  display: grid; grid-template-columns: auto 1fr; gap: 24px; align-items: start;
 }
-.stat-box { border-right: 1px solid #e2e8f0; padding-right: 14px; }
-.stat-box:last-child { border-right: none; }
-.stat-label { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; }
-.stat-value { font-size: 18px; font-weight: 600; color: #0f172a; margin-top: 2px; }
-.stat-sub { font-size: 11px; color: #94a3b8; margin-top: 1px; }
+@media (max-width: 1100px) {
+  .stats-card { grid-template-columns: 1fr; gap: 20px; }
+}
+
+.stats-section { min-width: 0; }
+.stats-section .section-label {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;
+  color: #94a3b8; font-weight: 600; margin-bottom: 10px;
+}
+.stats-section.docs { border-right: 1px solid #e2e8f0; padding-right: 24px; }
+.stats-section.docs .section-grid {
+  display: grid; grid-template-columns: repeat(2, minmax(140px, 1fr)); gap: 10px;
+}
+@media (max-width: 1100px) {
+  .stats-section.docs { border-right: none; border-bottom: 1px solid #e2e8f0; padding-right: 0; padding-bottom: 16px; }
+}
+
+/* Activity: 3 per row, 2 rows. Each box gets enough space to be fully readable. */
+.stats-section.activity .section-grid {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px;
+}
+@media (max-width: 700px) {
+  .stats-section.activity .section-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+.stat-box {
+  padding: 10px 14px; border-radius: 6px; position: relative; cursor: help;
+  background: #f8fafc; border: 1px solid #e2e8f0;
+  min-width: 0;
+}
+.stat-label {
+  font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.stat-value {
+  font-size: 20px; font-weight: 600; color: #0f172a; margin-top: 4px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.stat-sub {
+  font-size: 11px; color: #94a3b8; margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* Time-breakdown variants — visually distinguish me vs bot vs idle */
+.stat-box.variant-active { background: #eff6ff; border-color: #bfdbfe; }
+.stat-box.variant-active .stat-label { color: #1e40af; }
+.stat-box.variant-active .stat-value { color: #1e3a8a; }
+
+.stat-box.variant-user { background: #dbeafe; border-color: #93c5fd; }
+.stat-box.variant-user .stat-label { color: #1d4ed8; }
+.stat-box.variant-user .stat-value { color: #1e3a8a; }
+
+.stat-box.variant-agent { background: #1e293b; border-color: #0f172a; }
+.stat-box.variant-agent .stat-label { color: #94a3b8; }
+.stat-box.variant-agent .stat-value { color: #f1f5f9; }
+.stat-box.variant-agent .stat-sub { color: #64748b; }
+
+.stat-box.variant-idle { background: #f1f5f9; border-color: #e2e8f0; }
+.stat-box.variant-idle .stat-label { color: #94a3b8; }
+.stat-box.variant-idle .stat-value { color: #64748b; }
+.stat-box.variant-idle .stat-sub { color: #94a3b8; }
+
+/* Hover tooltip — uses data-tip attribute, no JS */
+.stat-box[data-tip]:hover::after {
+  content: attr(data-tip);
+  position: absolute; bottom: calc(100% + 6px); left: 50%;
+  transform: translateX(-50%);
+  background: #0f172a; color: #f1f5f9;
+  font-size: 12px; font-weight: 400; letter-spacing: 0;
+  text-transform: none;
+  padding: 8px 12px; border-radius: 6px;
+  width: max-content; max-width: 280px;
+  white-space: normal; line-height: 1.45;
+  z-index: 20; pointer-events: none;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.25);
+}
+.stat-box[data-tip]:hover::before {
+  content: '';
+  position: absolute; bottom: 100%; left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent; border-top-color: #0f172a;
+  z-index: 20;
+}
 
 .histogram {
   background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px; margin-bottom: 12px;

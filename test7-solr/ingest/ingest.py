@@ -26,6 +26,8 @@ from typing import Iterator
 import requests
 from selectolax.parser import HTMLParser
 
+from timeline import compute_timeline
+
 SOLR_URL = os.environ.get("SOLR_URL", "http://localhost:8983/solr/exocortex")
 EXPORT_ROOT = Path(os.environ.get("EXPORT_ROOT", "~/Documents/exocortex/export")).expanduser()
 
@@ -107,6 +109,11 @@ def build_session_doc(source: str, md_path: Path, project: str, session_id: str,
     u = int(s["user_turns"]) if s.get("user_turns") else None
     a = int(s["assistant_turns"]) if s.get("assistant_turns") else None
     total = (u or 0) + (a or 0) if (u is not None or a is not None) else None
+
+    # Timeline: split wall-clock into user/assistant/idle using the raw jsonl
+    jsonl_path = md_path.with_suffix(".jsonl")
+    tl = compute_timeline(jsonl_path) if jsonl_path.exists() else {}
+
     return {
         "id": f"{source}:session:{project}:{session_id}",
         "doc_type": "session",
@@ -127,6 +134,10 @@ def build_session_doc(source: str, md_path: Path, project: str, session_id: str,
         "started": started,
         "ended": ended,
         "updated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "user_seconds": tl.get("user_seconds"),
+        "assistant_seconds": tl.get("assistant_seconds"),
+        "idle_seconds": tl.get("idle_seconds"),
+        "active_seconds": tl.get("active_seconds"),
     }
 
 

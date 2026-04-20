@@ -47,13 +47,31 @@
     </div>
 
     <div class="tool">
-      <label for="min-turns" title="Each user OR assistant message counts as 1 turn">Min turns:</label>
-      <input type="number" id="min-turns" min="0" step="1" placeholder="any" style="width:72px" title="Total messages (user + assistant). 1 message = 1 turn.">
+      <label for="min-turns" title="1 message = 1 turn (user OR assistant)">Min turns:</label>
+      <select id="min-turns" title="Total messages (user + assistant)">
+        <option value="">any</option>
+        <option value="1">1+</option>
+        <option value="5">5+</option>
+        <option value="10">10+</option>
+        <option value="25">25+</option>
+        <option value="50">50+</option>
+        <option value="100">100+</option>
+        <option value="250">250+</option>
+      </select>
     </div>
 
     <div class="tool">
-      <label for="min-duration">Min minutes:</label>
-      <input type="number" id="min-duration" min="0" step="1" placeholder="any" style="width:72px">
+      <label for="min-duration">Min duration:</label>
+      <select id="min-duration">
+        <option value="">any</option>
+        <option value="1">1 min</option>
+        <option value="5">5 min</option>
+        <option value="15">15 min</option>
+        <option value="30">30 min</option>
+        <option value="60">1 h</option>
+        <option value="120">2 h</option>
+        <option value="240">4 h</option>
+      </select>
     </div>
   </section>
 

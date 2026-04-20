@@ -160,8 +160,12 @@ function renderChips() {
       : `date: last ${state.datePreset}`;
     add(lbl, () => { state.datePreset = 'all'; state.dateFrom = ''; state.dateTo = ''; applyPresetButtons(); $('#custom-dates').classList.add('hidden'); });
   }
-  if (state.minTurns)    add(`min turns: ${state.minTurns}`, () => { state.minTurns = ''; $('#min-turns').value = ''; });
-  if (state.minDuration) add(`min min: ${state.minDuration}`, () => { state.minDuration = ''; $('#min-duration').value = ''; });
+  if (state.minTurns)    add(`${state.minTurns}+ turns`, () => { state.minTurns = ''; $('#min-turns').value = ''; });
+  if (state.minDuration) {
+    const m = parseInt(state.minDuration, 10);
+    const label = m >= 60 ? `${(m / 60).toFixed(m % 60 === 0 ? 0 : 1)}h+ duration` : `${m}m+ duration`;
+    add(label, () => { state.minDuration = ''; $('#min-duration').value = ''; });
+  }
   for (const s of state.filters.source)    add(`source: ${s}`,  () => state.filters.source.delete(s));
   for (const p of state.filters.project)   add(`project: ${p}`, () => state.filters.project.delete(p));
   for (const d of state.filters.doc_type)  add(`type: ${d}`,    () => state.filters.doc_type.delete(d));
@@ -179,29 +183,85 @@ function renderStats(j) {
   const tot   = s.total_turns || {};
   const dur   = s.duration_seconds || {};
   const dates = s.started || {};
+  const us = s.user_seconds || {};
+  const as_ = s.assistant_seconds || {};
+  const idle = s.idle_seconds || {};
+  const act = s.active_seconds || {};
 
-  const box = (label, value, sub) => {
+  const cap = s._capped_at_seconds;
+  const capHours = cap ? (cap / 3600).toFixed(0) : '';
+  const capNote = cap ? `capped at ${capHours}h per session` : '';
+
+  // Helpers
+  const box = (label, value, sub, variant, tip) => {
     const b = document.createElement('div');
-    b.className = 'stat-box';
+    b.className = 'stat-box' + (variant ? ' variant-' + variant : '');
+    if (tip) b.dataset.tip = tip;
     const lbl = document.createElement('div'); lbl.className = 'stat-label'; lbl.textContent = label;
     const val = document.createElement('div'); val.className = 'stat-value'; val.textContent = String(value);
     b.appendChild(lbl); b.appendChild(val);
     if (sub) { const s2 = document.createElement('div'); s2.className = 'stat-sub'; s2.textContent = sub; b.appendChild(s2); }
     return b;
   };
+  const section = (label, cls) => {
+    const sec = document.createElement('div');
+    sec.className = 'stats-section ' + cls;
+    const hd = document.createElement('div');
+    hd.className = 'section-label';
+    hd.textContent = label;
+    sec.appendChild(hd);
+    const grid = document.createElement('div');
+    grid.className = 'section-grid';
+    sec.appendChild(grid);
+    sec._grid = grid;
+    return sec;
+  };
 
-  card.appendChild(box('Hits', fmtInt(j.numFound)));
+  // --- Documents section (left) ---
+  const docs = section('Documents', 'docs');
+  docs._grid.appendChild(box('Hits', fmtInt(j.numFound), '', null,
+    'Number of documents matching the current query and filters.'));
+  if (dates.min && dates.max) {
+    docs._grid.appendChild(box('Date span',
+      `${fmtDate(dates.min)} → ${fmtDate(dates.max)}`, '', null,
+      'Earliest and latest "started" timestamp across matching documents.'));
+  }
+  card.appendChild(docs);
+
+  // --- Activity section (right) ---
+  const act_sec = section('Activity', 'activity');
+  let any = false;
+
   if (tot.sum != null && tot.count > 0) {
-    card.appendChild(box('Total turns', fmtInt(tot.sum),
-      `${fmtInt(turns.sum ?? 0)}u + ${fmtInt(asst.sum ?? 0)}a · avg ${(tot.mean ?? 0).toFixed(1)}`));
+    act_sec._grid.appendChild(box('Total turns', fmtInt(tot.sum),
+      `${fmtInt(turns.sum ?? 0)}u + ${fmtInt(asst.sum ?? 0)}a · avg ${(tot.mean ?? 0).toFixed(1)}`,
+      null,
+      'Total messages across matching sessions. 1 message = 1 turn (user OR assistant).'));
+    any = true;
   }
   if (dur.sum != null && dur.count > 0) {
     const totalHours = (dur.sum / 3600).toFixed(1);
-    card.appendChild(box('Total time', `${totalHours} h`, dur.max ? `longest ${fmtHours(dur.max)}` : ''));
+    const sub = [dur.max ? `longest ${fmtHours(dur.max)}` : '', capNote].filter(Boolean).join(' · ');
+    act_sec._grid.appendChild(box('Total time', `${totalHours} h`, sub, null,
+      `Sum of wall-clock duration (last message − first message) across matching sessions. Each session is capped at ${capHours}h so a session left open overnight doesn't dominate the sum.`));
+    any = true;
   }
-  if (dates.min && dates.max) {
-    card.appendChild(box('Date span', `${fmtDate(dates.min)} → ${fmtDate(dates.max)}`, ''));
+  if (act.sum != null && act.count > 0) {
+    const pct = (n) => act.sum ? `${Math.round((n / act.sum) * 100)}%` : '';
+    act_sec._grid.appendChild(box('Active time', `${(act.sum / 3600).toFixed(1)} h`, 'user + agent', 'active',
+      `User time + Agent time. The time you were actually engaged with Claude (gaps of 10 min or more count as idle, not active). Each session capped at ${capHours}h.`));
+    act_sec._grid.appendChild(box('User time', `${(us.sum / 3600).toFixed(1)} h`, pct(us.sum) + ' of active', 'user',
+      `Time between the model responding and your next message — i.e. you reading, thinking, and typing. Each session capped at ${capHours}h.`));
+    act_sec._grid.appendChild(box('Agent time', `${(as_.sum / 3600).toFixed(1)} h`, pct(as_.sum) + ' of active', 'agent',
+      `Time between your message and the next event — the model thinking, generating, and running tools. Each session capped at ${capHours}h.`));
+    if (idle.sum > 0) {
+      act_sec._grid.appendChild(box('Idle time', `${(idle.sum / 3600).toFixed(1)} h`, 'gaps >10 min', 'idle',
+        `Sum of gaps longer than 10 minutes within sessions. Presumed away-from-keyboard / session left open. Each session capped at ${capHours}h.`));
+    }
+    any = true;
   }
+  if (any) card.appendChild(act_sec);
+
   card.classList.remove('hidden');
 }
 
@@ -409,6 +469,11 @@ function renderHit(d) {
   if (d.started) bits.push(d.started.slice(0, 16).replace('T', ' '));
   if (d.duration) bits.push(d.duration);
   if (typeof d.total_turns === 'number') bits.push(`${d.total_turns} turns (${d.user_turns ?? 0}u+${d.assistant_turns ?? 0}a)`);
+  if (typeof d.active_seconds === 'number') {
+    const us = Math.round((d.user_seconds ?? 0) / 60);
+    const as_ = Math.round((d.assistant_seconds ?? 0) / 60);
+    bits.push(`${us}m user + ${as_}m agent`);
+  }
   if (d.size_kb) bits.push(`${d.size_kb.toFixed(1)}kb`);
   if (bits.length) meta.appendChild(document.createTextNode(bits.join(' · ')));
   card.appendChild(meta);

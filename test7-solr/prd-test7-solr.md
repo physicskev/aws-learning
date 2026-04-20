@@ -53,6 +53,7 @@ Observed totals at time of writing: 933 indexable items split as 635 session mar
 7. **Agent vs interactive**: "How much time is the agent doing things unattended?" → facet on is_agent.
 8. **Bookmarkable investigation**: "Save and revisit a specific query + filter combination" → URL state sync.
 9. **Readable review**: "Open a session and actually read it" → modal with rendered markdown.
+10. **Me vs bot effort split**: "How much of my Claude time was ME engaged vs the model working unattended?" → read the Active / User / Agent / Idle breakdown on the stats card.
 
 ## Features
 
@@ -123,13 +124,14 @@ Observed totals at time of writing: 933 indexable items split as 635 session mar
 
 ### F7 — Session-size filters
 
-**Description:** Numeric minimum filters to hide noise and focus on substantial work.
+**Description:** Preset-dropdown minimum filters to hide short/trivial sessions and focus on substantial work.
 
 **Acceptance Criteria:**
-- [ ] `Min turns`: hides docs whose `user_turns` is below the threshold.
-- [ ] `Min minutes`: hides docs whose `duration_seconds` is below `threshold × 60`.
-- [ ] Empty input = no filter.
+- [ ] `Min turns` is a dropdown with presets: `any`, `1+`, `5+`, `10+`, `25+`, `50+`, `100+`, `250+`. Filters on `total_turns` (= user_turns + assistant_turns), so 1 message = 1 turn.
+- [ ] `Min duration` is a dropdown with presets: `any`, `1 min`, `5 min`, `15 min`, `30 min`, `1 h`, `2 h`, `4 h`. Filters on `duration_seconds` (converted from minutes × 60).
+- [ ] Empty selection = no filter.
 - [ ] Non-session doc types (no numeric field) are naturally excluded when either filter is active.
+- [ ] Active filter shows as a chip (F10) with a human label (`50+ turns`, `2h+ duration`).
 
 ### F8 — Monthly activity histogram
 
@@ -145,13 +147,18 @@ Observed totals at time of writing: 933 indexable items split as 635 session mar
 
 ### F9 — Aggregate stats card
 
-**Description:** Summary statistics for the current result set, computed server-side via Solr's Stats component.
+**Description:** Summary statistics for the current result set, arranged in two logically-grouped sections. All time aggregates are per-session-capped (F19) so a single abandoned session can't dominate the sums.
 
 **Acceptance Criteria:**
-- [ ] Shows: total hits, total user turns, total assistant turns, total time (hours), longest session, date span (earliest → latest).
-- [ ] Averages shown as subtext where meaningful.
-- [ ] Card hidden when no session-like data is present in the result set.
+- [ ] **Documents section** (left): Hits, Date span.
+- [ ] **Activity section** (right, 3×2 grid): Total turns, Total time, Active time, User time, Agent time, Idle time.
+- [ ] Activity boxes use color variants to distinguish user vs bot at a glance: Active (light blue), User (stronger blue), Agent (dark slate / white text), Idle (muted grey).
+- [ ] Each Activity time box shows its percentage of Active time as subtext where meaningful (User, Agent).
+- [ ] Subtext under Total time shows `longest Nh · capped at 8h per session`.
+- [ ] Every stat box has a descriptive hover tooltip (CSS `data-tip` bubble, not native `title`) explaining what it measures and noting the cap.
+- [ ] Card hidden entirely when no session-like data is present.
 - [ ] Updates live as filters and query change.
+- [ ] Responsive: sections stack vertically below 1100px viewport; Activity grid becomes 2-col below 700px.
 
 ### F10 — Active filter chips
 
@@ -238,6 +245,35 @@ Observed totals at time of writing: 933 indexable items split as 635 session mar
 - [ ] `GET /api/suggest?q=pre` returns titles whose first term starts with `pre`.
 - [ ] Endpoint exists; UI integration deferred (no live autocomplete in the search box yet).
 
+### F19 — Per-session timeline analysis (user / agent / idle)
+
+**Description:** For every indexed session, compute how much wall-clock time was you actively engaged vs. the model (and tools) working vs. idle — by parsing per-message timestamps from the raw session `.jsonl`.
+
+**Acceptance Criteria:**
+- [ ] For each gap between consecutive events, classify into one of three buckets and credit it accordingly:
+  - Gap ≤ 10 min AND next event is a real user message → `user_seconds`.
+  - Gap ≤ 10 min AND next event is assistant / tool_result / system / file-snapshot → `assistant_seconds`.
+  - Gap > 10 min → `idle_seconds` (regardless of next-event type).
+- [ ] A "real user message" has `type=user` and non-empty text content (plain string, or a list with at least one non-`tool_result` block). Synthetic user events whose content is only tool_result echoes are treated as assistant time.
+- [ ] `active_seconds` = `user_seconds` + `assistant_seconds`, stored as its own field.
+- [ ] Idle threshold is a single constant (`IDLE_THRESHOLD_SECONDS = 600` in `ingest/timeline.py`), changeable without schema changes but requiring full re-ingest to take effect.
+- [ ] Timeline module is standalone-runnable for debugging: `uv run python timeline.py <path-to-session.jsonl>`.
+- [ ] If a session has no matching `.jsonl`, timeline fields are absent (not zero) on that doc.
+- [ ] Per-hit meta line in the UI shows `N turns (Xu+Ya) · Mm user + Km agent` alongside the raw duration.
+
+### F20 — Per-session stats cap (include but limit)
+
+**Description:** Outlier sessions (e.g. a session left open overnight for 180h) used to be **excluded** from aggregate stats. They are now **included but capped** — each session contributes at most `stats_cap_seconds` (default 28800 = 8h) to every time-based stat.
+
+**Acceptance Criteria:**
+- [ ] All sessions matching the query+filters count in the stats (no session is silently dropped).
+- [ ] Each session's contribution to `duration_seconds`, `user_seconds`, `assistant_seconds`, `idle_seconds`, `active_seconds` is capped at `stats_cap_seconds` via a Solr function query: `{!func}min(<field>, cap)`.
+- [ ] The stats sub-query is scoped with `fq=doc_type:session` to avoid `min()` returning the cap value for docs missing those fields (which would inflate sums by a large multiple).
+- [ ] `stats_cap_seconds=0` disables the cap (raw sums).
+- [ ] Default cap is 8h.
+- [ ] Response includes `stats._capped_at_seconds` so the UI can render a transparent "capped at Nh per session" note.
+- [ ] Non-time stats (user_turns, assistant_turns, total_turns, size_kb, started) are not capped.
+
 ## Data Models
 
 ### Solr document — common fields
@@ -264,8 +300,13 @@ Observed totals at time of writing: 933 indexable items split as 635 session mar
 | `topic` | text_en | From summary.csv or parsed header |
 | `user_turns` | pint | |
 | `assistant_turns` | pint | |
+| `total_turns` | pint | `user_turns + assistant_turns`. The canonical "1 message = 1 turn" field used by the Min turns filter. |
 | `duration` | string | Raw form, e.g. `"2h 6m"` |
-| `duration_seconds` | pint | Parsed duration in seconds |
+| `duration_seconds` | pint | Parsed wall-clock duration |
+| `user_seconds` | pint | Timeline output (F19). Active user time. |
+| `assistant_seconds` | pint | Timeline output. Active agent/tool time. |
+| `idle_seconds` | pint | Timeline output. Sum of gaps > 10 min. |
+| `active_seconds` | pint | `user_seconds + assistant_seconds`. |
 | `size_kb` | pfloat | |
 
 ### Copy fields
@@ -308,8 +349,9 @@ Query parameters:
 | `is_agent` | `"true"`/`"false"` | — | Single value |
 | `date_from` | string | — | ISO-8601 or Solr date math (e.g. `NOW-30DAYS`) |
 | `date_to` | string | — | Same |
-| `min_turns` | int | — | Filter: `user_turns:[min_turns TO *]` |
+| `min_turns` | int | — | Filter: `total_turns:[min_turns TO *]` (1 message = 1 turn) |
 | `min_duration_seconds` | int | — | Filter: `duration_seconds:[… TO *]` |
+| `stats_cap_seconds` | int | 28800 | Per-session cap applied to time-based stats (F20). Pass 0 to disable. |
 
 Response 200 shape:
 ```json
@@ -339,13 +381,21 @@ Response 200 shape:
   "stats": {
     "user_turns":       {"sum": 1963, "count": 554, "mean": 3.54, "min": 0, "max": 93},
     "assistant_turns":  {...},
-    "duration_seconds": {"sum": 1198920, ...},
+    "total_turns":      {...},
+    "duration_seconds": {"sum": 543600, "count": 635, "mean": 856, "min": 0, "max": 28800},
+    "user_seconds":     {"sum": 138240, "count": 635, "mean": 218, "min": 0, "max": 9720},
+    "assistant_seconds":{"sum": 188280, "count": 635, "mean": 296, "min": 0, "max": 26640},
+    "idle_seconds":     {"sum": 248400, "count": 635, "mean": 391, "min": 0, "max": 28800},
+    "active_seconds":   {"sum": 322560, "count": 635, "mean": 508, "min": 0, "max": 28800},
     "size_kb":          {...},
-    "started":          {"min": "2026-03-24T16:22:00Z", "max": "2026-04-19T19:48:00Z"}
+    "started":          {"min": "2026-03-24T16:22:00Z", "max": "2026-04-19T19:48:00Z"},
+    "_capped_at_seconds": 28800
   },
   "suggestion": null
 }
 ```
+
+Note: time-based stat fields (`duration_seconds`, `user_seconds`, `assistant_seconds`, `idle_seconds`, `active_seconds`) are per-session capped at `stats_cap_seconds`. The stats sub-query is scoped to `doc_type:session` (only sessions carry these fields).
 
 ### `GET /api/mlt/{doc_id}`
 
@@ -422,17 +472,23 @@ Environment variables:
 - **Very long session bodies.** Solr's default limits apply; no chunking in v1.
 - **Spellcheck gap.** The `_default` configset spellchecker targets `_text_` (not our `text` field), so "did you mean" suggestions are often empty. Documented as a known deferred issue; not a blocker.
 - **MLT via `/mlt` handler.** Not available in `_default`; implementation uses the MLT query parser through `/select` instead.
+- **Solr `min()` returns the cap value for missing fields.** If you run `{!func}min(duration_seconds, 28800)` as `stats.field` without scoping to sessions, docs without a `duration_seconds` field silently contribute the cap value to the sum (confirmed experimentally — a 30× sum inflation when `fq=doc_type:session` was missing). Always scope stats queries to the subset of docs that actually have the field.
+- **Sessions with no matching `.jsonl`.** Timeline fields are absent (not zero), so the stats `count` for `user_seconds`/`assistant_seconds`/`idle_seconds` may be lower than the session count.
+- **User+Agent per session can exceed Active after capping.** Because each metric is capped independently at 8h, a session with 5h user + 5h agent (= 10h active) reports capped values of 5h + 5h + 8h for user/agent/active. The three numbers are useful individually; they are not expected to be additive after capping.
+- **Race conditions on rapid facet clicks.** Mitigated by a monotonic sequence number on every search. Only the latest response is rendered; older responses are discarded as they arrive.
 
 ## Milestones
 
-Historical record of the build order. All M1–M4 are complete; M5 partial.
+Historical record of the build order. M1–M6 complete; M7 partial.
 
 1. **M1 — Solr up.** Docker-compose boots Solr 9; `exocortex` core created from `_default`; admin UI reachable.
 2. **M2 — Schema + ingest.** Schema applied via Schema API; full re-ingestion emits 4 `doc_type`s (history entries intentionally excluded); ~933 docs indexed.
 3. **M3 — FastAPI proxy on :8007.** Search / MLT / suggest / doc / health all respond; Solr params wrapped with sensible defaults.
 4. **M4 — Search UI.** Search box, facet sidebar, highlighted snippets, pagination, open-modal, MLT, Markdown rendering.
-5. **M4.5 — Investigation layer (completed).** Date presets + custom picker, sort options, min-turns / min-minutes filters, monthly histogram, stats card, active filter chips, URL state sync, Reset button, empty-query default view.
-6. **M5 — Polish (partial).** Did-you-mean and autocomplete endpoints stubbed; meaningful "did you mean" output requires configset tuning (known gap).
+5. **M4.5 — Investigation layer.** Date presets + custom picker, sort options, min-turns / min-minutes filters (initially number inputs, later preset dropdowns), monthly histogram, stats card, active filter chips, URL state sync, Reset button, empty-query default view.
+6. **M5 — Timeline split (F19).** New `ingest/timeline.py` module reads raw session `.jsonl`, classifies each gap into user/agent/idle, and writes per-session `user_seconds`, `assistant_seconds`, `idle_seconds`, `active_seconds` fields. Idle threshold initially 5 min, later relaxed to 10 min. Stats card gets colored variants to distinguish me vs bot vs idle.
+7. **M6 — Stats cap refactor (F20).** Changed from "exclude sessions > 8h" to "include but cap each session's contribution at 8h via Solr function queries". Required scoping the stats sub-query to `doc_type:session` after discovering that `min()` inflates sums when the field is missing on non-session docs.
+8. **M7 — Polish (partial).** Did-you-mean and autocomplete endpoints stubbed; meaningful "did you mean" output requires configset tuning (known gap).
 
 ## Open Questions (still deferred, not blocking)
 

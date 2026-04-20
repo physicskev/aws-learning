@@ -44,6 +44,13 @@ FIELDS: list[dict] = [
     # total_turns = user_turns + assistant_turns. Each individual message is 1 "turn".
     # Filtering on this matches the user's mental model better than user_turns alone.
     {"name": "total_turns",     "type": "pint",    "indexed": True, "stored": True, "docValues": True},
+
+    # Per-session timeline breakdown computed from the raw session jsonl.
+    # See ingest/timeline.py. Gaps > 5 min = idle. Real user msgs drive user_seconds.
+    {"name": "user_seconds",      "type": "pint", "indexed": True, "stored": True, "docValues": True},
+    {"name": "assistant_seconds", "type": "pint", "indexed": True, "stored": True, "docValues": True},
+    {"name": "idle_seconds",      "type": "pint", "indexed": True, "stored": True, "docValues": True},
+    {"name": "active_seconds",    "type": "pint", "indexed": True, "stored": True, "docValues": True},
     {"name": "duration",        "type": "string",  "indexed": False, "stored": True},
     {"name": "duration_seconds","type": "pint",    "indexed": True, "stored": True, "docValues": True},
     {"name": "size_kb",         "type": "pfloat",  "indexed": True, "stored": True, "docValues": True},

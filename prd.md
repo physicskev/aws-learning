@@ -190,12 +190,14 @@ Single page with:
 - `ingest/setup_schema.py` — applies the schema via the Schema API (idempotent); no configset in git
 - `ingest/ingest.py` — full re-ingestion (wipe + reload) over 4 source folders: macbook-work, macbook-personal, atpoc-sandbox, atpoc-secureapi. Emits 4 `doc_type`s: `session`, `project_doc`, `summary_row`, `insight`. ~933 docs total. `history.jsonl` is deliberately excluded (too noisy — dominated by `/help`, `/login` commands).
 - `api/main.py` — FastAPI on 8007 proxies `/api/search`, `/api/mlt/{id}`, `/api/suggest`, `/api/doc/{id}`, `/api/health`. Single Solr call per search returns hits + facets + date histogram + aggregate stats, all internally consistent.
-- `ui/` — single-page HTML/JS. Investigation-first: date presets (All/7d/30d/90d/Custom), sort (relevance/newest/oldest/most-turns/longest/largest), min-turns + min-minutes numeric filters, faceted sidebar, monthly activity histogram (click a bar to drill into that month), aggregate stats card (total turns, total time, date span), active filter chips, URL state sync, rendered markdown modal.
+- `ui/` — single-page HTML/JS. Investigation-first: date presets (All/7d/30d/90d/Custom), sort (relevance/newest/oldest/most-turns/longest/largest), min-turns + min-minutes preset dropdowns, faceted sidebar, monthly activity histogram (click a bar to drill into that month), aggregate stats card split into Documents and Activity sections with color-coded User/Agent/Idle boxes and hover tooltips, active filter chips, URL state sync, rendered markdown modal.
+- `ingest/timeline.py` — per-session timeline analyzer. Parses raw `.jsonl` event timestamps and splits each session's wall-clock into `user_seconds`, `assistant_seconds`, and `idle_seconds` buckets (10-min gap threshold). Writes four extra pint fields to each session doc so stats can answer "how much time was ME vs the model".
 
 **Key design choices captured in `test7-solr/prd-test7-solr.md`:**
 - Session IDs qualified by project in the unique key (`{source}:session:{project}:{session_id}`) because the same session can appear under multiple project folders (worktree orphans).
 - `total_turns = user_turns + assistant_turns` — 1 message = 1 turn. Matches user mental model better than `user_turns` alone.
 - Portability: repointing at a hosted Solr later is one env var (`SOLR_URL`).
+- **Per-session stats cap.** Every session contributes to aggregate stats but each time metric is per-session-capped (default 8h) via Solr function queries, scoped with `fq=doc_type:session`. A session left open overnight for 180h contributes at most 8h to every time sum. This replaced an earlier "exclude >8h sessions" approach.
 
 **Not yet on EC2.** Port 8007 is reserved by convention but the Docker dependency means Nginx wiring is deferred.
 

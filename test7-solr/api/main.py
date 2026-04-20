@@ -79,6 +79,7 @@ def search(
     date_to: str | None = None,
     min_turns: int | None = None,
     min_duration_seconds: int | None = None,
+    stats_cap_seconds: int = 28800,   # 8h — excludes outlier sessions from stats sums; set 0 to disable
 ) -> dict:
     # Build filter queries
     fqs: list[str] = []
@@ -113,7 +114,7 @@ def search(
         "sort": sort_clause,
         "start": start,
         "rows": rows,
-        "fl": "id,doc_type,source,project,title,topic,session_id,started,ended,duration,is_agent,user_turns,assistant_turns,total_turns,duration_seconds,size_kb,path,score",
+        "fl": "id,doc_type,source,project,title,topic,session_id,started,ended,duration,is_agent,user_turns,assistant_turns,total_turns,duration_seconds,user_seconds,assistant_seconds,idle_seconds,active_seconds,size_kb,path,score",
         "hl": "true",
         "hl.fl": "body",
         "hl.fragsize": 220,
@@ -132,7 +133,7 @@ def search(
         "facet.range.end": "NOW/MONTH+1MONTH",
         "facet.range.gap": "+1MONTH",
         "stats": "true",
-        "stats.field": ["user_turns", "assistant_turns", "total_turns", "duration_seconds", "size_kb", "started"],
+        "stats.field": ["user_turns", "assistant_turns", "total_turns", "duration_seconds", "user_seconds", "assistant_seconds", "idle_seconds", "active_seconds", "size_kb", "started"],
         "spellcheck": "true",
         "spellcheck.collate": "true",
     }
@@ -172,8 +173,45 @@ def search(
                 suggestion = entry["collationQuery"]
                 break
 
-    # Stats — sums and min/max for the current result set (post-filter)
-    stats_raw = data.get("stats", {}).get("stats_fields", {}) or {}
+    # Stats — aggregated over sessions only (the other doc types don't have
+    # duration/turns fields, and Solr's min() function returns the cap value
+    # for missing fields, which would inflate sums enormously).
+    # Every session contributes, but each time metric is per-session-capped at
+    # `stats_cap_seconds` (default 8h) so a session left open overnight doesn't
+    # dominate the sum.
+    if stats_cap_seconds and stats_cap_seconds > 0:
+        cap = int(stats_cap_seconds)
+        capped = lambda field, key: (
+            f"{{!func key={key} count=true sum=true mean=true min=true max=true}}min({field},{cap})"
+        )
+        # Scope the stats computation to sessions (user/assistant/idle fields only
+        # exist on sessions; summary_rows have duration but no timeline breakdown).
+        stats_fqs = (fqs or []) + ["doc_type:session"]
+        stats_params = {
+            "q": q,
+            "defType": "edismax",
+            "qf": "title^4 topic^3 body^1",
+            "rows": 0,
+            "stats": "true",
+            "stats.field": [
+                capped("duration_seconds",  "duration_seconds"),
+                capped("user_seconds",      "user_seconds"),
+                capped("assistant_seconds", "assistant_seconds"),
+                capped("idle_seconds",      "idle_seconds"),
+                capped("active_seconds",    "active_seconds"),
+                "user_turns",
+                "assistant_turns",
+                "total_turns",
+                "size_kb",
+                "started",
+            ],
+            "fq": stats_fqs,
+        }
+        stats_data = solr_get("/select", stats_params)
+        stats_raw = stats_data.get("stats", {}).get("stats_fields", {}) or {}
+    else:
+        stats_raw = data.get("stats", {}).get("stats_fields", {}) or {}
+
     stats = {
         field: {
             "sum": stats_raw.get(field, {}).get("sum"),
@@ -182,8 +220,9 @@ def search(
             "min": stats_raw.get(field, {}).get("min"),
             "max": stats_raw.get(field, {}).get("max"),
         }
-        for field in ("user_turns", "assistant_turns", "total_turns", "duration_seconds", "size_kb", "started")
+        for field in ("user_turns", "assistant_turns", "total_turns", "duration_seconds", "user_seconds", "assistant_seconds", "idle_seconds", "active_seconds", "size_kb", "started")
     }
+    stats["_capped_at_seconds"] = stats_cap_seconds if stats_cap_seconds > 0 else None
 
     return {
         "numFound": resp.get("numFound", 0),
