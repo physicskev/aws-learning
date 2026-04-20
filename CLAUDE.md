@@ -72,6 +72,10 @@ Processes use `nohup` so they survive SSH disconnect, but NOT instance reboot.
 | test3-search | 8003 | FTS5 movie search |
 | test4-board | 8004 | Kanban board / ticket tracker |
 | test5-lambda | 8005 | Lambda handler (local wrapper) |
+| test6-databases | 8006 | RDS Postgres + DynamoDB CRUD |
+| test7-solr | 8007 | Solr 9 + FastAPI proxy over personal Claude Code export |
+
+test7 is the first experiment that needs Docker (Solr runs in a local `solr:9` container). See `test7-solr/CLAUDE.md` for its own quickstart. Not yet wired into Nginx on EC2.
 
 ## Seed data
 

@@ -168,6 +168,39 @@ Single page with:
 
 ---
 
+## Experiment 6: Cloud Databases (test6-databases) — DONE
+
+**Purpose:** Side-by-side CRUD UI over AWS RDS Postgres and DynamoDB. First experiment that talks to real cloud databases instead of SQLite.
+
+**Architecture:**
+- FastAPI on port 8006 with two backends: `psycopg2` for RDS, `boto3` for DynamoDB
+- Same UI drives both — toggle between them to compare SQL vs NoSQL ergonomics
+- Credentials loaded from `.env` (gitignored), not `secret.py`
+
+**What it teaches:** RDS Postgres setup via CLI, security group rules, DynamoDB partition-key design, the mental shift from SQL JOINs to NoSQL access-pattern design.
+
+---
+
+## Experiment 7: Solr Search (test7-solr) — DONE (local-only)
+
+**Purpose:** Local Solr 9 instance + FastAPI + vanilla-JS UI for searching and investigating the personal Claude Code conversation archive at `~/Documents/exocortex/export/`. First experiment that uses Docker (Solr runs in `solr:9`). First that's an investigation/analytics tool rather than a CRUD form.
+
+**Architecture:**
+- `docker/docker-compose.yml` — Solr 9 standalone, named volume for data, `solr-precreate exocortex` boots the core from `_default`
+- `ingest/setup_schema.py` — applies the schema via the Schema API (idempotent); no configset in git
+- `ingest/ingest.py` — full re-ingestion (wipe + reload) over 4 source folders: macbook-work, macbook-personal, atpoc-sandbox, atpoc-secureapi. Emits 4 `doc_type`s: `session`, `project_doc`, `summary_row`, `insight`. ~933 docs total. `history.jsonl` is deliberately excluded (too noisy — dominated by `/help`, `/login` commands).
+- `api/main.py` — FastAPI on 8007 proxies `/api/search`, `/api/mlt/{id}`, `/api/suggest`, `/api/doc/{id}`, `/api/health`. Single Solr call per search returns hits + facets + date histogram + aggregate stats, all internally consistent.
+- `ui/` — single-page HTML/JS. Investigation-first: date presets (All/7d/30d/90d/Custom), sort (relevance/newest/oldest/most-turns/longest/largest), min-turns + min-minutes numeric filters, faceted sidebar, monthly activity histogram (click a bar to drill into that month), aggregate stats card (total turns, total time, date span), active filter chips, URL state sync, rendered markdown modal.
+
+**Key design choices captured in `test7-solr/prd-test7-solr.md`:**
+- Session IDs qualified by project in the unique key (`{source}:session:{project}:{session_id}`) because the same session can appear under multiple project folders (worktree orphans).
+- `total_turns = user_turns + assistant_turns` — 1 message = 1 turn. Matches user mental model better than `user_turns` alone.
+- Portability: repointing at a hosted Solr later is one env var (`SOLR_URL`).
+
+**Not yet on EC2.** Port 8007 is reserved by convention but the Docker dependency means Nginx wiring is deferred.
+
+---
+
 ## Future Work
 
 - **Systemd services** — so experiments survive EC2 reboot

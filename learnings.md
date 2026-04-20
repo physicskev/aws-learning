@@ -58,6 +58,36 @@ Insights and patterns discovered while building with Claude Code, AWS, and FastA
 - **boto3 uses your `~/.aws/credentials` automatically** — no need to pass access keys in code. The `aws configure` setup from earlier works for both CLI and boto3. Just set the region via env var or boto3 resource constructor. (2026-04-16)
 - **Develop locally, deploy selectively** — build and test on your Mac (fast iteration), use cloud databases for persistence (data survives restarts), deploy individual features as Lambda functions when you want to share them. EC2 stays stopped most of the time. (2026-04-16)
 
+## Solr (test7-solr)
+
+- **Bootstrap Solr cores from `_default` + apply schema via the Schema API** — way cleaner than maintaining a custom configset in git. `solr-precreate exocortex` uses the built-in `_default` on first boot; a separate `setup_schema.py` then POSTs field definitions to `/schema`. Idempotent: it lists existing fields and adds only what's missing. Schema lives in Python code, not XML. (2026-04-19)
+- **`facet.mincount=1` is GLOBAL in Solr** — applies to both field facets AND range facets. If you set it globally, your monthly date histogram silently loses its empty months, which breaks visual continuity. Fix: scope per field with `f.<field>.facet.mincount=1` on just the categorical facets, leave range facets alone. (2026-04-19)
+- **The `/mlt` request handler isn't in Solr's `_default` configset** — calling it 404s. Use the **MLT query parser** via `/select` instead: `q={!mlt qf="body title" mintf=2 mindf=2}<doc_id>`. Same functionality, works against the default configset, no solrconfig.xml edits needed. (2026-04-19)
+- **Session IDs are not globally unique when exported** — Claude Code exports can include the same `session_id` under multiple project folders (e.g. git worktree orphans). Solr silently overwrites docs with matching `id` at ingest. Fix: qualify the unique key with project (`{source}:session:{project}:{session_id}`) so each path gets its own doc. Lost 99 sessions to this before I caught it. (2026-04-19)
+- **`history.jsonl` is too noisy to index as-is** — dominated by short slash-commands like `/help` and `/login` that drown out substantive content in search results. Dropped it entirely; kept sessions, project docs, summary rows, and insights. 2317 docs → 933 docs, dramatically better signal. (2026-04-19)
+- **Solr Stats component gives you free aggregate analytics** — `stats=true&stats.field=duration_seconds&stats.field=started` returns sum/count/mean/min/max in the same response as your search hits. Powers a "Total time: 333 hours" stat card without a second query. (2026-04-19)
+- **Solr is portable by env var** — the whole stack (ingest script + FastAPI) reads `SOLR_URL`. Local Docker, EC2, or SolrCloud — change one variable, done. Don't bake "localhost" into app code. (2026-04-19)
+
+## Docker for local infra
+
+- **Named volume > bind mount for Solr data** — `solr_data:/var/solr` in docker-compose avoids host UID/permission issues (the `solr:9` image runs as UID 8983). Bind mounts need `chown` on the host. Named volumes just work. (2026-04-19)
+- **`solr-precreate <core>` only runs on first boot** — if you change config and restart, the pre-create is skipped because the core already exists. To apply new settings, either tear down the volume (`docker compose down -v`) or use the Schema/Config API. (2026-04-19)
+- **Healthcheck with `wget -qO-` beats `curl`** — the official `solr:9` image ships `wget` but not `curl`. `wget -qO- http://localhost:8983/solr/<core>/admin/ping?wt=json | grep -q '"status":"OK"'` gives you a proper healthy/unhealthy gate in compose. (2026-04-19)
+
+## Frontend: async races + event handling
+
+- **Prefer a monotonic sequence number over AbortController for "only render the latest response"** — `let seq = 0; const mine = ++seq; ... if (mine !== seq) return;` is 3 lines, works across any async chain, and doesn't rely on fetch honoring the signal between `await fetch()` and `await r.json()`. AbortController is fine but more moving parts. (2026-04-19)
+- **`<label><input type="checkbox">` synthesizes clicks you can't always see** — clicking anywhere in the label fires a click on the child input; the input toggles; the change event fires. Combined with rebuilding the DOM on every search response, this produced a phantom "stale render" bug that looked like the filter wasn't applying. Fix: ditch the input entirely. Use a plain `<div>` with a styled `<span>` as the visual checkbox, plus **event delegation on the container** that reads `data-*` attributes. One handler attached once, zero closures over re-rendered DOM nodes. (2026-04-19)
+- **Always CLEAR the DOM before deciding to hide it** — `renderStats()` had `if (!hasData) { card.classList.add('hidden'); return; }` BEFORE `card.innerHTML = ''`. When a new filter produced an empty stats shape, the card hid but kept its prior content, so the "hidden" content was still in the DOM and became visible the next time `classList.remove('hidden')` ran. Always clear first, then decide to hide. (2026-04-19)
+- **Add a visible debug line, not just console.log** — when investigation-heavy UI misbehaves, a tiny `<div id="debug">` that shows "fetched #3: /api/search?... → 125 hits" lets the user diagnose without opening DevTools. Huge for remote debugging over screenshots. (2026-04-19)
+- **`fetch(..., { cache: 'no-store' })` eliminates browser-cache as a suspect** — by default, `fetch` may serve cached responses for same-URL GETs. When debugging "the server returned the right thing but the UI shows wrong data", rule this out explicitly. (2026-04-19)
+- **URL state sync is the bookmarkability feature** — `history.replaceState` on every state change + `urlToState` on load + a `popstate` handler for back/forward. No client storage, no server sessions — the URL is the single source of truth. Investigation tools live and die by this: "send me the view you're looking at" has to be copy-paste-URL simple. (2026-04-19)
+
+## Claude Code — end-of-session workflow
+
+- **`/update-all` wrapper skill** — composes `/update-claude`, `/update-prd`, `/update-learnings`, then commits and pushes. Skills with `disable-model-invocation: true` can't be triggered via the Skill tool programmatically, so the wrapper re-executes their instructions inline. The sub-skills each say "do NOT commit" so each run is safe on its own; the wrapper lifts that restriction for a one-shot wrap-up. (2026-04-19)
+- **When a skill's output feels off, re-read the sub-skill's SKILL.md inline and follow the steps directly** — don't try to route through the Skill tool for skills that have model invocation disabled. The user intent ("run /update-learnings") is fulfilled by doing what the skill says, not by calling it. (2026-04-19)
+
 ## Gotchas & Pitfalls
 
 - **uv + hatchling "Unable to determine which files to ship"** — `uv init` creates a pyproject.toml with hatchling as the build backend, which expects a Python package directory matching the project name. For FastAPI apps that aren't installable packages, add `[tool.hatch.build.targets.wheel] packages = ["."]` to fix it. (2026-04-15)
